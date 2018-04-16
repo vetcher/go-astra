@@ -86,7 +86,7 @@ func ParsePackage(path string) ([]*types.File, error) {
 		if file.IsDir() {
 			continue
 		}
-		if strings.HasSuffix(file.Name(), "_text.go") {
+		if !strings.HasSuffix(file.Name(), ".go") {
 			continue
 		}
 		f, err := ParseFile(file.Name())
