@@ -21,7 +21,7 @@ type MainStructure struct {
 		B *struct {
 			A **struct {
 				A []struct {
-					A int
+					A int // comment of A
 				}
 			}
 		}

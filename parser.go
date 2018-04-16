@@ -529,7 +529,7 @@ func parseParams(fields *ast.FieldList, file *types.File, opt Option) ([]types.V
 		if err != nil {
 			return nil, fmt.Errorf("wrong type of %s: %v", strings.Join(namesOfIdents(field.Names), ","), err)
 		}
-		docs := parseComments(field.Doc, opt)
+		docs := parseCommentFromSources(opt, field.Doc, field.Comment)
 		if len(field.Names) == 0 {
 			vars = append(vars, types.Variable{
 				Base: types.Base{

@@ -33,7 +33,6 @@ func TestParsingFile(t *testing.T) {
 	for _, test := range tests {
 		tt := test
 		t.Run(tt.Name, func(t *testing.T) {
-			t.Parallel()
 			expected, err := ioutil.ReadFile(filepath.Join(assetsDir, tt.Path, result))
 			if err != nil {
 				t.Fatal(err)
