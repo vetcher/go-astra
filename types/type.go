@@ -19,6 +19,7 @@ const (
 	KindEllipsis
 	KindChan
 	KindFunc
+	KindStruct
 )
 
 type Type interface {

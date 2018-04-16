@@ -201,6 +201,7 @@ func parseDeclaration(decl ast.Decl, file *types.File, opt Option) error {
 							Docs: parseCommentFromSources(opt, d.Doc, typeSpec.Doc, typeSpec.Comment),
 						},
 						Fields: strFields,
+						Kind:   types.KindStruct,
 					})
 				default:
 					if opt.check(IgnoreTypes) {
@@ -383,6 +384,15 @@ func parseByType(spec interface{}, file *types.File, opt Option) (tt types.Type,
 		return nil, fmt.Errorf("bad expression")
 	case *ast.FuncType:
 		return parseFunction(t, file, opt)
+	case *ast.StructType:
+		strFields, err := parseStructFields(t, file, opt)
+		if err != nil {
+			return nil, fmt.Errorf("can't parse anonymus struct fields: %v", err)
+		}
+		return types.Struct{
+			Fields: strFields,
+			Kind:   types.KindStruct,
+		}, nil
 	default:
 		return nil, fmt.Errorf("%v: %T", ErrUnexpectedSpec, t)
 	}

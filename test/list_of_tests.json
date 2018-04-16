@@ -6,5 +6,9 @@
   {
     "name": "interfaces",
     "path": "interfaces"
+  },
+  {
+    "name": "structures",
+    "path": "structures"
   }
 ]
