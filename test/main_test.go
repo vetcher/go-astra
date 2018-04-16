@@ -2,11 +2,9 @@ package test
 
 import (
 	"encoding/json"
-	"testing"
-
 	"io/ioutil"
-
 	"path/filepath"
+	"testing"
 
 	"github.com/vetcher/go-astra"
 )
