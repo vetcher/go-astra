@@ -15,7 +15,7 @@ import (
 )
 
 // Opens and parses file by name and return information about it.
-func ParseFile(filename string) (*types.File, error) {
+func ParseFile(filename string, options ...Option) (*types.File, error) {
 	path, err := filepath.Abs(filename)
 	if err != nil {
 		return nil, fmt.Errorf("can not filepath.Abs: %v", err)
@@ -25,30 +25,14 @@ func ParseFile(filename string) (*types.File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error when parse file: %v", err)
 	}
-	info, err := ParseAstFile(tree)
+	info, err := ParseAstFile(tree, options...)
 	if err != nil {
 		return nil, fmt.Errorf("error when parsing info from file: %v", err)
 	}
 	return info, nil
 }
 
-func ParseFileWithoutGOPATH(filename string) (*types.File, error) {
-	path, err := filepath.Abs(filename)
-	if err != nil {
-		return nil, fmt.Errorf("can not filepath.Abs: %v", err)
-	}
-	fset := token.NewFileSet()
-	tree, err := astparser.ParseFile(fset, path, nil, astparser.ParseComments)
-	if err != nil {
-		return nil, fmt.Errorf("error when parse file: %v", err)
-	}
-	info, err := ParseAstFile(tree)
-	if err != nil {
-		return nil, fmt.Errorf("error when parsing info from file %s: %v", filename, err)
-	}
-	return info, nil
-}
-
+// Merges parsed files to one. Helpful, when you need full information about package.
 func MergeFiles(files []*types.File) (*types.File, error) {
 	targetFile := &types.File{}
 	for _, file := range files {
@@ -72,7 +56,8 @@ func MergeFiles(files []*types.File) (*types.File, error) {
 	return targetFile, nil
 }
 
-func ParsePackage(path string) ([]*types.File, error) {
+// Parses all .go files from directory.
+func ParsePackage(path string, options ...Option) ([]*types.File, error) {
 	p, err := filepath.Abs(path)
 	if err != nil {
 		return nil, fmt.Errorf("can not filepath.Abs: %v", err)
@@ -89,7 +74,7 @@ func ParsePackage(path string) ([]*types.File, error) {
 		if !strings.HasSuffix(file.Name(), ".go") {
 			continue
 		}
-		f, err := ParseFile(file.Name())
+		f, err := ParseFile(p+"/"+file.Name(), options...)
 		if err != nil {
 			return nil, fmt.Errorf("can not parse %s: %v", file.Name(), err)
 		}
