@@ -23,8 +23,8 @@ var (
 type Option uint
 
 const (
-	IgnoreComments Option = 1
-	IgnoreStructs  Option = iota * 2
+	IgnoreComments Option = 1 << iota
+	IgnoreStructs
 	IgnoreInterfaces
 	IgnoreFunctions
 	IgnoreMethods
