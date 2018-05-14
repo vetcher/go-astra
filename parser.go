@@ -277,7 +277,6 @@ func parseVariables(decl *ast.GenDecl, file *types.File, opt Option) (vars []typ
 				Base: types.Base{
 					Name: name.Name,
 					Docs: parseCommentFromSources(opt, decl.Doc, spec.Doc, spec.Comment),
-					//Docs: mergeStringSlices(parseComments(decl.Doc, opt), parseComments(spec.Doc, opt), parseComments(spec.Comment, opt)),
 				},
 			}
 			var (

@@ -154,8 +154,6 @@ func TypeInterface(t Type) Type {
 		switch tt := t.(type) {
 		case TInterface:
 			return tt
-		case TMap:
-			return nil
 		default:
 			next, ok := tt.(LinearType)
 			if !ok {
@@ -170,6 +168,36 @@ func TypeEllipsis(t Type) Type {
 	for {
 		switch tt := t.(type) {
 		case TEllipsis:
+			return tt
+		default:
+			next, ok := tt.(LinearType)
+			if !ok {
+				return nil
+			}
+			t = next.NextType()
+		}
+	}
+}
+
+func TypeStruct(t Type) Type {
+	for {
+		switch tt := t.(type) {
+		case Struct:
+			return tt
+		default:
+			next, ok := tt.(LinearType)
+			if !ok {
+				return nil
+			}
+			t = next.NextType()
+		}
+	}
+}
+
+func TypeFunction(t Type) Type {
+	for {
+		switch tt := t.(type) {
+		case Function:
 			return tt
 		default:
 			next, ok := tt.(LinearType)
@@ -197,4 +225,6 @@ var (
 	// Checks, is type contain interface.
 	IsInterface = IsType(TypeInterface)
 	IsEllipsis  = IsType(TypeEllipsis)
+	IsStruct    = IsType(TypeStruct)
+	IsFunction  = IsType(TypeFunction)
 )
