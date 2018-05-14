@@ -45,21 +45,8 @@ var BuiltinFunctions = map[string]bool{
 
 // Checks is type is builtin type.
 func IsBuiltin(t Type) bool {
-	if t.TypeOf() != KindName {
-		return false
-	}
-	for {
-		switch tt := t.(type) {
-		case TName:
-			return IsBuiltinTypeString(tt.TypeName)
-		default:
-			next, ok := tt.(LinearType)
-			if !ok {
-				return false
-			}
-			t = next.NextType()
-		}
-	}
+	name, ok := t.(TName)
+	return ok && IsBuiltinTypeString(name.TypeName)
 }
 
 func IsBuiltinTypeString(t string) bool {

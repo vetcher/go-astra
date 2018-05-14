@@ -26,3 +26,7 @@ func (i Interface) String() string {
 func (i Interface) GoString() string {
 	return i.String()
 }
+
+func (i Interface) IsEmpty() bool {
+	return len(i.Methods) == 0 && len(i.Interfaces) == 0
+}

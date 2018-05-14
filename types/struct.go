@@ -19,12 +19,9 @@ type Struct struct {
 	Base
 	Fields  []StructField `json:"fields,omitempty"`
 	Methods []*Method     `json:"methods,omitempty"`
-	Kind    Kind          `json:"kind"`
 }
 
-func (f Struct) TypeOf() Kind {
-	return f.Kind
-}
+func (s Struct) t() { return }
 
 func stringFields(fields []StructField) string {
 	var str strings.Builder
@@ -39,6 +36,10 @@ func stringFields(fields []StructField) string {
 	return str.String()
 }
 
-func (f Struct) String() string {
-	return fmt.Sprintf("%s struct {%s}", f.Name, stringFields(f.Fields))
+func (s Struct) String() string {
+	return fmt.Sprintf("%s struct {%s}", s.Name, stringFields(s.Fields))
+}
+
+func (s Struct) IsEmpty() bool {
+	return len(s.Fields) == 0
 }

@@ -9,7 +9,6 @@ type Function struct {
 	Base
 	Args    []Variable `json:"args,omitempty"`
 	Results []Variable `json:"results,omitempty"`
-	Kind    Kind       `json:"kind"`
 }
 
 type Method struct {
@@ -36,9 +35,7 @@ func (f Function) GoString() string {
 	return f.String()
 }
 
-func (f Function) TypeOf() Kind {
-	return f.Kind
-}
+func (f Function) t() { return }
 
 func (f Method) String() string {
 	return fmt.Sprintf("func (%s) %s", f.Receiver.String(), f.funcStr())

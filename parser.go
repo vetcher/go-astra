@@ -201,7 +201,6 @@ func parseDeclaration(decl ast.Decl, file *types.File, opt Option) error {
 							Docs: parseCommentFromSources(opt, d.Doc, typeSpec.Doc, typeSpec.Comment),
 						},
 						Fields: strFields,
-						Kind:   types.KindStruct,
 					})
 				default:
 					if opt.check(IgnoreTypes) {
@@ -223,7 +222,6 @@ func parseDeclaration(decl ast.Decl, file *types.File, opt Option) error {
 			return nil
 		}
 		fn := types.Function{
-			Kind: types.KindFunc,
 			Base: types.Base{
 				Name: d.Name.Name,
 				Docs: parseComments(d.Doc, opt),
@@ -305,7 +303,7 @@ func parseVariables(decl *ast.GenDecl, file *types.File, opt Option) (vars []typ
 func parseByType(spec interface{}, file *types.File, opt Option) (tt types.Type, err error) {
 	switch t := spec.(type) {
 	case *ast.Ident:
-		return types.TName{Kind: types.KindName, TypeName: t.Name}, nil
+		return types.TName{TypeName: t.Name}, nil
 	case *ast.SelectorExpr:
 		im, err := findImportByAlias(file, t.X.(*ast.Ident).Name)
 		if err != nil && !opt.check(AllowAnyImportAliases) {
@@ -314,20 +312,19 @@ func parseByType(spec interface{}, file *types.File, opt Option) (tt types.Type,
 		if im == nil && !opt.check(AllowAnyImportAliases) {
 			return nil, fmt.Errorf("wrong import %d:%d", t.Pos(), t.End())
 		}
-		return types.TImport{Kind: types.KindImport, Import: im, Next: types.TName{TypeName: t.Sel.Name}}, nil
+		return types.TImport{Import: im, Next: types.TName{TypeName: t.Sel.Name}}, nil
 	case *ast.StarExpr:
 		next, err := parseByType(t.X, file, opt)
 		if err != nil {
 			return nil, err
 		}
-		if next.TypeOf() == types.KindPointer {
+		if _, ok := next.(types.TPointer); ok {
 			return types.TPointer{
-				Kind:             types.KindPointer,
 				Next:             next.(types.TPointer).NextType(),
 				NumberOfPointers: 1 + next.(types.TPointer).NumberOfPointers,
 			}, nil
 		}
-		return types.TPointer{Kind: types.KindPointer, Next: next, NumberOfPointers: 1}, nil
+		return types.TPointer{Next: next, NumberOfPointers: 1}, nil
 	case *ast.ArrayType:
 		l := parseArrayLen(t)
 		next, err := parseByType(t.Elt, file, opt)
@@ -336,11 +333,11 @@ func parseByType(spec interface{}, file *types.File, opt Option) (tt types.Type,
 		}
 		switch l {
 		case -3, -2:
-			return types.TArray{Kind: types.KindArray, Next: next, IsSlice: true}, nil
+			return types.TArray{Next: next, IsSlice: true}, nil
 		case -1:
-			return types.TArray{Kind: types.KindArray, Next: next, IsEllipsis: true}, nil
+			return types.TArray{Next: next, IsEllipsis: true}, nil
 		default:
-			return types.TArray{Kind: types.KindArray, Next: next, ArrayLen: l}, nil
+			return types.TArray{Next: next, ArrayLen: l}, nil
 		}
 	case *ast.MapType:
 		key, err := parseByType(t.Key, file, opt)
@@ -351,14 +348,13 @@ func parseByType(spec interface{}, file *types.File, opt Option) (tt types.Type,
 		if err != nil {
 			return nil, err
 		}
-		return types.TMap{Kind: types.KindMap, Key: key, Value: value}, nil
+		return types.TMap{Key: key, Value: value}, nil
 	case *ast.InterfaceType:
 		methods, embedded, err := parseInterfaceMethods(t, file, opt)
 		if err != nil {
 			return nil, err
 		}
 		return types.TInterface{
-			Kind: types.KindInterface,
 			Interface: &types.Interface{
 				Base:       types.Base{},
 				Methods:    methods,
@@ -370,13 +366,13 @@ func parseByType(spec interface{}, file *types.File, opt Option) (tt types.Type,
 		if err != nil {
 			return nil, err
 		}
-		return types.TEllipsis{Kind: types.KindEllipsis, Next: next}, nil
+		return types.TEllipsis{Next: next}, nil
 	case *ast.ChanType:
 		next, err := parseByType(t.Value, file, opt)
 		if err != nil {
 			return nil, err
 		}
-		return types.TChan{Kind: types.KindChan, Next: next, Direction: int(t.Dir)}, nil
+		return types.TChan{Next: next, Direction: int(t.Dir)}, nil
 	case *ast.ParenExpr:
 		return parseByType(t.X, file, opt)
 	case *ast.BadExpr:
@@ -390,7 +386,6 @@ func parseByType(spec interface{}, file *types.File, opt Option) (tt types.Type,
 		}
 		return types.Struct{
 			Fields: strFields,
-			Kind:   types.KindStruct,
 		}, nil
 	default:
 		return nil, fmt.Errorf("%v: %T", ErrUnexpectedSpec, t)
@@ -418,7 +413,7 @@ func parseArrayLen(t *ast.ArrayType) int {
 func parseByValue(spec interface{}, file *types.File, opt Option) (tt types.Type, err error) {
 	switch t := spec.(type) {
 	case *ast.BasicLit:
-		return types.TName{Kind: types.KindName, TypeName: t.Kind.String()}, nil
+		return types.TName{TypeName: t.Kind.String()}, nil
 	case *ast.CompositeLit:
 		return parseByValue(t.Type, file, opt)
 	case *ast.SelectorExpr:
@@ -429,7 +424,7 @@ func parseByValue(spec interface{}, file *types.File, opt Option) (tt types.Type
 		if im == nil && !opt.check(AllowAnyImportAliases) {
 			return nil, fmt.Errorf("wrong import %d:%d", t.Pos(), t.End())
 		}
-		return types.TImport{Kind: types.KindImport, Import: im}, nil
+		return types.TImport{Import: im}, nil
 	case *ast.FuncType:
 		fn, err := parseFunction(t, file, opt)
 		if err != nil {
@@ -490,9 +485,7 @@ func parseFunctionDeclaration(funcField *ast.Field, file *types.File, opt Option
 }
 
 func parseFunction(funcType *ast.FuncType, file *types.File, opt Option) (*types.Function, error) {
-	fn := &types.Function{
-		Kind: types.KindFunc,
-	}
+	var fn = &types.Function{}
 	err := parseFuncParamsAndResults(funcType, fn, file, opt)
 	if err != nil {
 		return nil, err
@@ -596,7 +589,7 @@ func findImportByAlias(file *types.File, alias string) (*types.Import, error) {
 			return imp, nil
 		}
 	}
-	// try to find by last package path
+	// try to find by last segment of package path
 	for _, imp := range file.Imports {
 		if alias == path.Base(imp.Package) {
 			return imp, nil
@@ -642,25 +635,20 @@ func findTypeByMethod(file *types.File, method *types.Method) (*types.FileType, 
 
 func IsCommonReceiver(t types.Type) bool {
 	for tt := t; tt != nil; {
-		switch tt.TypeOf() {
-		case types.KindArray, types.KindInterface, types.KindMap, types.KindImport, types.KindFunc:
+		switch x := tt.(type) {
+		case types.TArray, types.TInterface, types.TMap, types.TImport, types.Function:
 			return false
-		case types.KindPointer:
-			x, ok := tt.(types.TPointer)
-			if !ok {
-				// This code should be dead, but if it does not, then here is a bug in logic.
-				panic(fmt.Errorf("%s is of type Pointer, but really is %T", tt, tt))
-			}
+		case types.TPointer:
 			if x.NumberOfPointers > 1 {
 				return false
 			}
 			tt = x.NextType()
 		default:
-			x, ok := tt.(types.LinearType)
+			line, ok := tt.(types.LinearType)
 			if !ok {
 				return false
 			}
-			tt = x.NextType()
+			tt = line.NextType()
 			continue
 		}
 	}
