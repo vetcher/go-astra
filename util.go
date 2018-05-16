@@ -48,6 +48,7 @@ func MergeFiles(files []*types.File) (*types.File, error) {
 		targetFile.Structures = append(targetFile.Structures, file.Structures...)
 		targetFile.Methods = append(targetFile.Methods, file.Methods...)
 		targetFile.Types = append(targetFile.Types, file.Types...)
+		targetFile.Functions = append(targetFile.Functions, file.Functions...)
 	}
 	err := linkMethodsToStructs(targetFile)
 	if err != nil {
