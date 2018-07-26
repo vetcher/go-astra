@@ -206,7 +206,7 @@ func parseDeclaration(decl ast.Decl, file *types.File, opt Option) error {
 					if opt.check(IgnoreTypes) {
 						return nil
 					}
-					newType, err := parseByType(typeSpec.Type, file, opt)
+					newType, _, err := parseByType(typeSpec.Type, file, opt)
 					if err != nil {
 						return fmt.Errorf("%s: can't parse type: %v", typeSpec.Name.Name, err)
 					}
@@ -265,12 +265,15 @@ func parseReceiver(list *ast.FieldList, file *types.File, opt Option) (*types.Va
 }
 
 func parseVariables(decl *ast.GenDecl, file *types.File, opt Option) (vars []types.Variable, err error) {
+	iotaMark := false
 	for i := range decl.Specs {
 		spec := decl.Specs[i].(*ast.ValueSpec)
 		if len(spec.Values) > 0 && len(spec.Values) != len(spec.Names) {
 			return nil, fmt.Errorf("amount of variables and their values not same %d:%d", spec.Pos(), spec.End())
 		}
+		fmt.Println(spec)
 		for i, name := range spec.Names {
+			fmt.Println(name.Name)
 			variable := types.Variable{
 				Base: types.Base{
 					Name: name.Name,
@@ -281,16 +284,21 @@ func parseVariables(decl *ast.GenDecl, file *types.File, opt Option) (vars []typ
 				valType types.Type
 				err     error
 			)
+			fmt.Println(i, iotaMark)
 			if spec.Type != nil {
-				valType, err = parseByType(spec.Type, file, opt)
+				valType, iotaMark, err = parseByType(spec.Type, file, opt)
+				if err != nil {
+					return nil, fmt.Errorf("can't parse type: %v", err)
+				}
+			} else if iotaMark {
+				valType = iotaType
+			} else if i < len(spec.Values) {
+				valType, iotaMark, err = parseByValue(spec.Values[i], file, opt)
 				if err != nil {
 					return nil, fmt.Errorf("can't parse type: %v", err)
 				}
 			} else {
-				valType, err = parseByValue(spec.Values[i], file, opt)
-				if err != nil {
-					return nil, fmt.Errorf("can't parse type: %v", err)
-				}
+				return nil, fmt.Errorf("can't parse type: %d:%d", spec.Pos(), spec.End())
 			}
 
 			variable.Type = valType
@@ -300,59 +308,67 @@ func parseVariables(decl *ast.GenDecl, file *types.File, opt Option) (vars []typ
 	return
 }
 
-func parseByType(spec interface{}, file *types.File, opt Option) (tt types.Type, err error) {
+var iotaType = types.TName{TypeName: "iota"}
+
+func parseByType(spec interface{}, file *types.File, opt Option) (tt types.Type, im bool, err error) {
 	switch t := spec.(type) {
 	case *ast.Ident:
-		return types.TName{TypeName: t.Name}, nil
+		fmt.Println()
+		fmt.Println("tname:", t.Name)
+		if t.Name == "iota" {
+			fmt.Println("success")
+			return iotaType, true, nil
+		}
+		return types.TName{TypeName: t.Name}, false, nil
 	case *ast.SelectorExpr:
 		im, err := findImportByAlias(file, t.X.(*ast.Ident).Name)
 		if err != nil && !opt.check(AllowAnyImportAliases) {
-			return nil, fmt.Errorf("%s: %v", t.Sel.Name, err)
+			return nil, false, fmt.Errorf("%s: %v", t.Sel.Name, err)
 		}
 		if im == nil && !opt.check(AllowAnyImportAliases) {
-			return nil, fmt.Errorf("wrong import %d:%d", t.Pos(), t.End())
+			return nil, false, fmt.Errorf("wrong import %d:%d", t.Pos(), t.End())
 		}
-		return types.TImport{Import: im, Next: types.TName{TypeName: t.Sel.Name}}, nil
+		return types.TImport{Import: im, Next: types.TName{TypeName: t.Sel.Name}}, false, nil
 	case *ast.StarExpr:
-		next, err := parseByType(t.X, file, opt)
+		next, iotaMark, err := parseByType(t.X, file, opt)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if _, ok := next.(types.TPointer); ok {
 			return types.TPointer{
 				Next:             next.(types.TPointer).NextType(),
 				NumberOfPointers: 1 + next.(types.TPointer).NumberOfPointers,
-			}, nil
+			}, iotaMark, nil
 		}
-		return types.TPointer{Next: next, NumberOfPointers: 1}, nil
+		return types.TPointer{Next: next, NumberOfPointers: 1}, iotaMark, nil
 	case *ast.ArrayType:
 		l := parseArrayLen(t)
-		next, err := parseByType(t.Elt, file, opt)
+		next, iotaMark, err := parseByType(t.Elt, file, opt)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		switch l {
 		case -3, -2:
-			return types.TArray{Next: next, IsSlice: true}, nil
+			return types.TArray{Next: next, IsSlice: true}, iotaMark, nil
 		case -1:
-			return types.TArray{Next: next, IsEllipsis: true}, nil
+			return types.TArray{Next: next, IsEllipsis: true}, iotaMark, nil
 		default:
-			return types.TArray{Next: next, ArrayLen: l}, nil
+			return types.TArray{Next: next, ArrayLen: l}, iotaMark, nil
 		}
 	case *ast.MapType:
-		key, err := parseByType(t.Key, file, opt)
+		key, _, err := parseByType(t.Key, file, opt)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		value, err := parseByType(t.Value, file, opt)
+		value, _, err := parseByType(t.Value, file, opt)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		return types.TMap{Key: key, Value: value}, nil
+		return types.TMap{Key: key, Value: value}, false, nil
 	case *ast.InterfaceType:
 		methods, embedded, err := parseInterfaceMethods(t, file, opt)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		return types.TInterface{
 			Interface: &types.Interface{
@@ -360,35 +376,36 @@ func parseByType(spec interface{}, file *types.File, opt Option) (tt types.Type,
 				Methods:    methods,
 				Interfaces: embedded,
 			},
-		}, nil
+		}, false, nil
 	case *ast.Ellipsis:
-		next, err := parseByType(t.Elt, file, opt)
+		next, iotaMark, err := parseByType(t.Elt, file, opt)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		return types.TEllipsis{Next: next}, nil
+		return types.TEllipsis{Next: next}, iotaMark, nil
 	case *ast.ChanType:
-		next, err := parseByType(t.Value, file, opt)
+		next, iotaMark, err := parseByType(t.Value, file, opt)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		return types.TChan{Next: next, Direction: int(t.Dir)}, nil
+		return types.TChan{Next: next, Direction: int(t.Dir)}, iotaMark, nil
 	case *ast.ParenExpr:
 		return parseByType(t.X, file, opt)
 	case *ast.BadExpr:
-		return nil, fmt.Errorf("bad expression")
+		return nil, false, fmt.Errorf("bad expression")
 	case *ast.FuncType:
-		return parseFunction(t, file, opt)
+		tt, err := parseFunction(t, file, opt)
+		return tt, false, err
 	case *ast.StructType:
 		strFields, err := parseStructFields(t, file, opt)
 		if err != nil {
-			return nil, fmt.Errorf("can't parse anonymus struct fields: %v", err)
+			return nil, false, fmt.Errorf("can't parse anonymus struct fields: %v", err)
 		}
 		return types.Struct{
 			Fields: strFields,
-		}, nil
+		}, false, nil
 	default:
-		return nil, fmt.Errorf("%v: %T", ErrUnexpectedSpec, t)
+		return nil, false, fmt.Errorf("%v: %T", ErrUnexpectedSpec, t)
 	}
 }
 
@@ -410,29 +427,34 @@ func parseArrayLen(t *ast.ArrayType) int {
 }
 
 // Fill provided types.Type for cases, when variable's value is provided.
-func parseByValue(spec interface{}, file *types.File, opt Option) (tt types.Type, err error) {
+func parseByValue(spec interface{}, file *types.File, opt Option) (tt types.Type, iotaMark bool, err error) {
+	fmt.Printf("%T", spec)
 	switch t := spec.(type) {
 	case *ast.BasicLit:
-		return types.TName{TypeName: t.Kind.String()}, nil
+		return types.TName{TypeName: t.Kind.String()}, false, nil
 	case *ast.CompositeLit:
 		return parseByValue(t.Type, file, opt)
 	case *ast.SelectorExpr:
 		im, err := findImportByAlias(file, t.X.(*ast.Ident).Name)
 		if err != nil && !opt.check(AllowAnyImportAliases) {
-			return nil, fmt.Errorf("%s: %v", t.Sel.Name, err)
+			return nil, false, fmt.Errorf("%s: %v", t.Sel.Name, err)
 		}
 		if im == nil && !opt.check(AllowAnyImportAliases) {
-			return nil, fmt.Errorf("wrong import %d:%d", t.Pos(), t.End())
+			return nil, false, fmt.Errorf("wrong import %d:%d", t.Pos(), t.End())
 		}
-		return types.TImport{Import: im}, nil
+		return types.TImport{Import: im}, false, nil
 	case *ast.FuncType:
 		fn, err := parseFunction(t, file, opt)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		return fn, nil
+		return fn, false, nil
+	case *ast.BinaryExpr:
+		return parseByValue(t.X, file, opt) // parse one in pair
+	case *ast.Ident: // iota case
+		return parseByType(t, file, opt)
 	default:
-		return nil, nil
+		return nil, false, nil
 	}
 }
 
@@ -455,7 +477,7 @@ func parseInterfaceMethods(ifaceType *ast.InterfaceType, file *types.File, opt O
 				fns = append(fns, fn)
 			case *ast.Ident:
 				// Embedded interfaces
-				iface, err := parseByType(method.Type, file, opt)
+				iface, _, err := parseByType(method.Type, file, opt)
 				if err != nil {
 					return nil, nil, err
 				}
@@ -517,7 +539,7 @@ func parseParams(fields *ast.FieldList, file *types.File, opt Option) ([]types.V
 		if field.Type == nil {
 			return nil, fmt.Errorf("param's type is nil %d:%d", field.Pos(), field.End())
 		}
-		t, err := parseByType(field.Type, file, opt)
+		t, _, err := parseByType(field.Type, file, opt)
 		if err != nil {
 			return nil, fmt.Errorf("wrong type of %s: %v", strings.Join(namesOfIdents(field.Names), ","), err)
 		}

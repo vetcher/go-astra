@@ -21,6 +21,12 @@ const (
 	ConstBlock2 float32 = 1.0
 )
 
+const (
+	Iota1 = iota + 1
+	Iota2
+	Iota3
+)
+
 var VarA string
 
 var VarB = "var b"
