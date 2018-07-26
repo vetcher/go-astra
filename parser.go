@@ -271,9 +271,7 @@ func parseVariables(decl *ast.GenDecl, file *types.File, opt Option) (vars []typ
 		if len(spec.Values) > 0 && len(spec.Values) != len(spec.Names) {
 			return nil, fmt.Errorf("amount of variables and their values not same %d:%d", spec.Pos(), spec.End())
 		}
-		fmt.Println(spec)
 		for i, name := range spec.Names {
-			fmt.Println(name.Name)
 			variable := types.Variable{
 				Base: types.Base{
 					Name: name.Name,
@@ -284,7 +282,6 @@ func parseVariables(decl *ast.GenDecl, file *types.File, opt Option) (vars []typ
 				valType types.Type
 				err     error
 			)
-			fmt.Println(i, iotaMark)
 			if spec.Type != nil {
 				valType, iotaMark, err = parseByType(spec.Type, file, opt)
 				if err != nil {
@@ -313,10 +310,7 @@ var iotaType = types.TName{TypeName: "iota"}
 func parseByType(spec interface{}, file *types.File, opt Option) (tt types.Type, im bool, err error) {
 	switch t := spec.(type) {
 	case *ast.Ident:
-		fmt.Println()
-		fmt.Println("tname:", t.Name)
 		if t.Name == "iota" {
-			fmt.Println("success")
 			return iotaType, true, nil
 		}
 		return types.TName{TypeName: t.Name}, false, nil
@@ -428,7 +422,6 @@ func parseArrayLen(t *ast.ArrayType) int {
 
 // Fill provided types.Type for cases, when variable's value is provided.
 func parseByValue(spec interface{}, file *types.File, opt Option) (tt types.Type, iotaMark bool, err error) {
-	fmt.Printf("%T", spec)
 	switch t := spec.(type) {
 	case *ast.BasicLit:
 		return types.TName{TypeName: t.Kind.String()}, false, nil
