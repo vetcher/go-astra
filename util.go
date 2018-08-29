@@ -5,11 +5,10 @@ import (
 	"go/ast"
 	astparser "go/parser"
 	"go/token"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"io/ioutil"
 
 	"github.com/vetcher/go-astra/types"
 )
@@ -58,6 +57,7 @@ func MergeFiles(files []*types.File) (*types.File, error) {
 }
 
 // Parses all .go files from directory.
+// Deprecated: use GetPackage instead
 func ParsePackage(path string, options ...Option) ([]*types.File, error) {
 	p, err := filepath.Abs(path)
 	if err != nil {
@@ -84,6 +84,26 @@ func ParsePackage(path string, options ...Option) ([]*types.File, error) {
 	return parsedFiles, nil
 }
 
+func GetPackage(path string, options ...Option) (*types.File, error) {
+	p, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("can not filepath.Abs: %v", err)
+	}
+	fset := token.NewFileSet()
+	pkgs, err := astparser.ParseDir(fset, p, nil, astparser.ParseComments)
+	if err != nil {
+		return nil, fmt.Errorf("can not parse dir: %v", err)
+	}
+	if len(pkgs) > 1 {
+		return nil, fmt.Errorf("unexpected number of packages: expect 1, found %d", len(pkgs))
+	}
+	for _, pkg := range pkgs {
+		f := ast.MergePackageFiles(pkg, ast.FilterUnassociatedComments|ast.FilterFuncDuplicates|ast.FilterImportDuplicates)
+		return ParseAstFile(f, options...)
+	}
+	return nil, fmt.Errorf("unexpected number of packages: expect 1, found 0")
+}
+
 func ResolvePackagePath(outPath string) (string, error) {
 	gopath := os.Getenv("GOPATH")
 	if gopath == "" {
@@ -94,13 +114,14 @@ func ResolvePackagePath(outPath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
-	gopathSrc := filepath.Join(gopath, "src")
-	if !strings.HasPrefix(absOutPath, gopathSrc) {
-		return "", ErrNotInGoPath
+	for _, path := range strings.Split(gopath, ":") {
+		gopathSrc := filepath.Join(path, "src")
+		if !strings.HasPrefix(absOutPath, gopathSrc) {
+			continue
+		}
+		return absOutPath[len(gopathSrc)+1:], nil
 	}
-
-	return absOutPath[len(gopathSrc)+1:], nil
+	return "", ErrNotInGoPath
 }
 
 func namesOfIdents(idents []*ast.Ident) (res []string) {
