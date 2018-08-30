@@ -4,10 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
+	"go/build"
+	"go/parser"
 	"go/token"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/fatih/structtag"
 	"github.com/vetcher/go-astra/types"
@@ -110,19 +114,57 @@ func parseTopLevelDeclarations(decls []ast.Decl, file *types.File, opt Option) e
 	return nil
 }
 
+var (
+	packagesPathNameCache = map[string]string{}
+	mx                    sync.Mutex
+)
+
 func constructAliasName(spec *ast.ImportSpec) string {
 	if spec.Name != nil {
 		return spec.Name.Name
 	}
-	return constructAliasNameString(spec.Path.Value)
+	importPath := strings.Trim(spec.Path.Value, `"`)
+	mx.Lock()
+	defer mx.Unlock()
+	name, ok := packagesPathNameCache[importPath]
+	if ok {
+		return name
+	}
+	for _, p := range []string{build.Default.GOROOT, "vendor", build.Default.GOPATH} {
+		name = findPackageName(p, importPath)
+		if name != "" {
+			break
+		}
+	}
+	if name == "" {
+		name = constructAliasNameString(spec.Path.Value)
+	}
+	packagesPathNameCache[importPath] = name
+	return name
 }
+
+var importAliasReplacer = strings.NewReplacer("-", "")
 
 func constructAliasNameString(str string) string {
 	name := path.Base(strings.Trim(str, `"`))
+	name = importAliasReplacer.Replace(name)
 	if types.BuiltinTypes[name] || types.BuiltinFunctions[name] {
 		name = "_" + name
 	}
 	return name
+}
+
+func findPackageName(src, path string) string {
+	for _, gopath := range strings.Split(src, ":") {
+		pkgs, err := parser.ParseDir(token.NewFileSet(), filepath.Join(gopath, path), nil, parser.PackageClauseOnly)
+		if err != nil {
+			continue
+		}
+		for k := range pkgs {
+			return k
+		}
+	}
+	return ""
 }
 
 func parseDeclaration(decl ast.Decl, file *types.File, opt Option) error {
